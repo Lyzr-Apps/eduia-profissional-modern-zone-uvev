@@ -404,6 +404,8 @@ export default function Page() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [chatError, setChatError] = useState('')
   const [chatSuccess, setChatSuccess] = useState('')
+  const [pointsDeducted, setPointsDeducted] = useState(false)
+  const [messageCount, setMessageCount] = useState(0)
 
   // Session state
   const [userId, setUserId] = useState('')
@@ -500,8 +502,19 @@ export default function Page() {
     setMessages([])
     setChatError('')
     setChatSuccess('')
+    setPointsDeducted(false)
+    setMessageCount(0)
     setActiveScreen('chat')
     setMobileMenuOpen(false)
+
+    // Send initial greeting from agent
+    const greetingMessage: ChatMessage = {
+      id: generateId(),
+      role: 'assistant',
+      content: 'Ola! Eu sou o EduIA, seu assistente de geracao de conteudo academico.\n\nPosso criar trabalhos completos, incluindo introducao, desenvolvimento, conclusao e referencias. Para comecar, me informe:\n\n- **Tema/Assunto** do trabalho\n- **Nivel academico**: Fundamental, Medio, Tecnico ou Faculdade\n- **Numero de paginas** (documentos) ou **slides** (apresentacoes)\n- **Formato**: Documento ou Apresentacao de Slides\n\nDescreva tudo de uma vez ou vamos conversando passo a passo!',
+      timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    }
+    setMessages([greetingMessage])
   }, [])
 
   // Send message
@@ -509,14 +522,10 @@ export default function Page() {
     const trimmed = inputValue.trim()
     if (!trimmed || isGenerating) return
 
-    // Check points
-    if (points < POINTS_PER_GENERATION) {
-      setShowBuyModal(true)
-      return
-    }
-
     setChatError('')
     setChatSuccess('')
+
+    const newMessageCount = messageCount + 1
 
     const userMessage: ChatMessage = {
       id: generateId(),
@@ -526,6 +535,7 @@ export default function Page() {
     }
     setMessages(prev => [...prev, userMessage])
     setInputValue('')
+    setMessageCount(newMessageCount)
     setIsGenerating(true)
     setActiveAgentId(AGENT_ID)
 
@@ -550,43 +560,58 @@ export default function Page() {
         }
         setMessages(prev => [...prev, assistantMessage])
 
-        // Deduct points
-        setPoints(prev => Math.max(0, prev - POINTS_PER_GENERATION))
+        // Check if the response looks like generated content (longer responses with structure)
+        // The agent first asks questions (short responses), then generates content (long responses)
+        const isGeneratedContent = text.length > 500 || text.includes('# ') || text.includes('## ')
 
-        // Determine topic from the first user message in this session
-        const firstUserMsg = messages.find(m => m.role === 'user')
-        const topic = firstUserMsg?.content || trimmed
+        if (isGeneratedContent && !pointsDeducted) {
+          // Check points before deducting
+          if (points < POINTS_PER_GENERATION) {
+            setShowBuyModal(true)
+          } else {
+            // Deduct points only once per session for actual content generation
+            setPoints(prev => Math.max(0, prev - POINTS_PER_GENERATION))
+            setPointsDeducted(true)
 
-        // Extract level heuristic
-        let level = 'Faculdade'
-        const lowerTopic = topic.toLowerCase()
-        if (lowerTopic.includes('fundamental') || lowerTopic.includes('basico')) level = 'Fundamental'
-        else if (lowerTopic.includes('medio') || lowerTopic.includes('ensino medio')) level = 'Medio'
-        else if (lowerTopic.includes('tecnico') || lowerTopic.includes('tecnologo')) level = 'Tecnico'
+            // Save to history only when real content is generated
+            setMessages(prev => {
+              const allMsgs = prev
+              const firstUserMsg = allMsgs.find(m => m.role === 'user')
+              const topic = firstUserMsg?.content || trimmed
 
-        // Extract format heuristic
-        let format = 'documento'
-        if (lowerTopic.includes('slide') || lowerTopic.includes('apresentacao') || lowerTopic.includes('powerpoint')) format = 'slides'
+              // Extract level heuristic from all user messages in session
+              const allUserText = allMsgs.filter(m => m.role === 'user').map(m => m.content).join(' ').toLowerCase()
+              let level = 'Faculdade'
+              if (allUserText.includes('fundamental') || allUserText.includes('basico')) level = 'Fundamental'
+              else if (allUserText.includes('medio') || allUserText.includes('ensino medio')) level = 'Medio'
+              else if (allUserText.includes('tecnico') || allUserText.includes('tecnologo')) level = 'Tecnico'
 
-        // Save to history
-        const entry: HistoryEntry = {
-          id: generateId(),
-          topic: topic.length > 80 ? topic.substring(0, 80) + '...' : topic,
-          level,
-          format,
-          pageCount: 0,
-          content: text,
-          date: getDateString(),
-          pointCost: POINTS_PER_GENERATION,
-          messages: [...messages, userMessage, assistantMessage]
+              // Extract format heuristic
+              let format = 'documento'
+              if (allUserText.includes('slide') || allUserText.includes('apresentacao') || allUserText.includes('powerpoint')) format = 'slides'
+
+              const entry: HistoryEntry = {
+                id: generateId(),
+                topic: topic.length > 80 ? topic.substring(0, 80) + '...' : topic,
+                level,
+                format,
+                pageCount: 0,
+                content: text,
+                date: getDateString(),
+                pointCost: POINTS_PER_GENERATION,
+                messages: allMsgs
+              }
+              setHistory(h => [entry, ...h])
+              return prev
+            })
+
+            setChatSuccess('Conteudo gerado com sucesso!')
+            setTimeout(() => setChatSuccess(''), 4000)
+          }
         }
-        setHistory(prev => [entry, ...prev])
-        setChatSuccess('Conteudo gerado com sucesso!')
-        setTimeout(() => setChatSuccess(''), 4000)
       } else {
         const errorMsg = result?.error || result?.response?.message || 'Erro ao gerar conteudo. Tente novamente.'
         setChatError(errorMsg)
-        // Refund points on error - don't deduct
       }
     } catch (err) {
       setChatError('Erro de conexao. Verifique sua internet e tente novamente.')
@@ -594,7 +619,7 @@ export default function Page() {
       setIsGenerating(false)
       setActiveAgentId(null)
     }
-  }, [inputValue, isGenerating, points, userId, sessionId, messages, getTimestamp, getDateString])
+  }, [inputValue, isGenerating, points, pointsDeducted, userId, sessionId, messageCount, getTimestamp, getDateString])
 
   // Handle key press
   const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
@@ -805,18 +830,15 @@ export default function Page() {
 
         {/* Chat messages */}
         <ScrollArea className="flex-1 p-4">
-          {messages.length === 0 && !isGenerating && (
-            <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center">
-              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                <IoSparkles className="w-7 h-7 text-primary" />
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-2">Como posso ajudar?</h3>
-              <p className="text-sm text-muted-foreground max-w-md mb-6 leading-relaxed">
-                Descreva o trabalho academico que precisa. Informe o tema, nivel academico
-                (fundamental, medio, tecnico ou faculdade), formato (documento ou slides)
-                e numero de paginas desejado.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg w-full">
+          {messages.map(msg => (
+            <ChatBubble key={msg.id} message={msg} onCopy={handleCopyMessage} />
+          ))}
+
+          {/* Suggestion buttons after greeting */}
+          {messages.length === 1 && messages[0].role === 'assistant' && !isGenerating && (
+            <div className="mt-4 mb-4">
+              <p className="text-xs text-muted-foreground mb-3 text-center">Sugestoes rapidas:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-lg mx-auto">
                 {[
                   'Trabalho sobre a Revolucao Francesa para ensino medio, 8 paginas',
                   'Apresentacao de slides sobre fotossintese para fundamental, 10 slides',
@@ -828,16 +850,12 @@ export default function Page() {
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-4 flex items-center gap-1">
+              <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1 justify-center">
                 <FaCoins className="w-3 h-3" />
                 Cada geracao custa {POINTS_PER_GENERATION} pontos
               </p>
             </div>
           )}
-
-          {messages.map(msg => (
-            <ChatBubble key={msg.id} message={msg} onCopy={handleCopyMessage} />
-          ))}
 
           {isGenerating && <TypingIndicator />}
 
