@@ -1,0 +1,22 @@
+{
+  "agent_name": "EduIA Content Generator",
+  "agent_id": "6998de3ee5ae4890f6e2bfa0",
+  "description": "Conversational academic content generation agent. Gathers user requirements (topic, academic level, page/slide count, format type), then produces complete, original, well-structured academic content including introduction, development, conclusion, and references. Adapts language complexity to the specified academic level. Outputs in Portuguese.",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "response": "string"
+  },
+  "example_response": {
+    "response": "The agent's response text containing either questions for requirement gathering or the generated academic content"
+  },
+  "has_module_outputs": true,
+  "module_outputs_example": {
+    "artifact_files": [
+      {
+        "file_url": "https://example.com/file.pdf"
+      }
+    ]
+  }
+}

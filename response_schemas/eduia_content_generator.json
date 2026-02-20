@@ -1,0 +1,12 @@
+{
+  "agent_name": "EduIA Content Generator",
+  "agent_id": "6998de3ee5ae4890f6e2bfa0",
+  "agent_type": "text",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "response_schema": {
+    "response": "string - The agent's response text"
+  },
+  "access_pattern": "result.response.result.response",
+  "description": "Conversational academic content generator that outputs in Portuguese"
+}
