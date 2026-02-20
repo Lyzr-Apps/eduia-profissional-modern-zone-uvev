@@ -511,7 +511,7 @@ export default function Page() {
     const greetingMessage: ChatMessage = {
       id: generateId(),
       role: 'assistant',
-      content: 'Ola! Eu sou o EduIA, seu assistente de geracao de conteudo academico.\n\nPosso criar trabalhos completos, incluindo introducao, desenvolvimento, conclusao e referencias. Para comecar, me informe:\n\n- **Tema/Assunto** do trabalho\n- **Nivel academico**: Fundamental, Medio, Tecnico ou Faculdade\n- **Numero de paginas** (documentos) ou **slides** (apresentacoes)\n- **Formato**: Documento ou Apresentacao de Slides\n\nDescreva tudo de uma vez ou vamos conversando passo a passo!',
+      content: '**EduIA -- Criacao de Trabalhos**\n\nTrabalhos e apresentacoes feitos do zero\nEntrega em PDF, Word ou Slides\nVoce comeca com 250 pontos gratis!\n\nPara comecar, me diga o que voce precisa. Vou precisar saber:\n\n- **Tema** do trabalho\n- **Nivel**: Fundamental, Medio, Tecnico ou Faculdade\n- **Quantidade** de paginas ou slides\n- **Formato**: Documento ou Apresentacao\n\nPode enviar tudo de uma vez ou vamos conversando!',
       timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     }
     setMessages([greetingMessage])
@@ -567,6 +567,7 @@ export default function Page() {
         if (isGeneratedContent && !pointsDeducted) {
           // Check points before deducting
           if (points < POINTS_PER_GENERATION) {
+            setChatError('Seus pontos nao sao suficientes. Escolha um plano para continuar usando a EduIA.')
             setShowBuyModal(true)
           } else {
             // Deduct points only once per session for actual content generation
@@ -690,8 +691,8 @@ export default function Page() {
                 </div>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Gere trabalhos academicos completos com introducao, desenvolvimento, conclusao e referencias.
-                Escolha o nivel, formato e numero de paginas desejado.
+                Trabalhos e apresentacoes feitos do zero, com qualidade profissional e entrega rapida.
+                Entrega em PDF, Word ou Slides, organizados e prontos para envio.
               </p>
               <Button onClick={startNewWork} className="w-full mt-4 shadow-sm">
                 <FiPlus className="w-4 h-4 mr-2" />
@@ -716,7 +717,11 @@ export default function Page() {
               {points < 150 && (
                 <div className="mt-3 p-2 bg-destructive/10 rounded-lg flex items-center gap-2">
                   <FiAlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-                  <p className="text-xs text-destructive">Seus pontos estao acabando!</p>
+                  <p className="text-xs text-destructive">
+                    {points < POINTS_PER_GENERATION
+                      ? 'Seus pontos nao sao suficientes. Escolha um plano para continuar.'
+                      : 'Seus pontos estao acabando!'}
+                  </p>
                 </div>
               )}
               <Button variant="outline" onClick={() => setShowBuyModal(true)} className="w-full mt-3">
@@ -1148,7 +1153,18 @@ export default function Page() {
                 onBuy={() => handleBuyPoints(4000)}
               />
             </div>
-            <p className="text-xs text-muted-foreground text-center mt-4">
+            <Separator className="my-4" />
+            <div className="bg-secondary/50 rounded-lg p-4 text-center space-y-2">
+              <p className="text-sm font-medium text-foreground">Pagamento via Pix</p>
+              <div className="flex items-center justify-center gap-2">
+                <code className="bg-background px-3 py-1.5 rounded-md text-sm font-mono text-foreground border border-border select-all">5566997213043</code>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => copyToClipboard('5566997213043')}>
+                  <FiCopy className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">Envie o comprovante apos o pagamento para liberar seus pontos.</p>
+            </div>
+            <p className="text-xs text-muted-foreground text-center mt-3">
               Ao comprar, voce concorda com os termos de uso da plataforma EduIA.
             </p>
           </DialogContent>
