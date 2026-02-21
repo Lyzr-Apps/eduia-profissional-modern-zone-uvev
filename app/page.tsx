@@ -10,20 +10,25 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-// Skeleton available if needed
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-// Tabs available if needed
 import { FiHome, FiMessageSquare, FiClock, FiShoppingCart, FiMenu, FiX, FiSend, FiCopy, FiCheck, FiChevronLeft, FiPlus, FiSearch, FiAlertCircle, FiChevronDown, FiChevronUp, FiExternalLink } from 'react-icons/fi'
 import { FaGraduationCap, FaFileAlt, FaCoins } from 'react-icons/fa'
 import { HiDocumentText, HiPresentationChartBar } from 'react-icons/hi'
 import { IoSparkles } from 'react-icons/io5'
+import { BsLightningChargeFill } from 'react-icons/bs'
 
 const AGENT_ID = '6998de3ee5ae4890f6e2bfa0'
-const POINTS_PER_GENERATION = 75
 const INITIAL_POINTS = 250
+
+// Variable point costs per work type
+const POINTS_SIMPLE = 60    // Trabalho simples (ate 5 paginas)
+const POINTS_COMPLETE = 120 // Trabalho completo (6+ paginas)
+const POINTS_SLIDES = 90    // Apresentacao em slides
+
+const QR_CODE_URL = 'https://asset.lyzr.app/ufVEPuaJ'
 
 // Types
 interface ChatMessage {
@@ -49,6 +54,19 @@ interface HistoryEntry {
 // Helper to generate unique IDs
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
+}
+
+// Determine point cost based on format and page count heuristic from user text
+function determinePointCost(allUserText: string, format: string): number {
+  if (format === 'slides') return POINTS_SLIDES
+  // Try to extract page count from user messages
+  const pageMatch = allUserText.match(/(\d+)\s*(?:pagina|paginas|pag|pags|p[áa]gina)/i)
+  if (pageMatch) {
+    const pages = parseInt(pageMatch[1], 10)
+    return pages > 5 ? POINTS_COMPLETE : POINTS_SIMPLE
+  }
+  // Default to simple if can't determine
+  return POINTS_SIMPLE
 }
 
 // Markdown renderer
@@ -101,7 +119,7 @@ class ErrorBoundary extends React.Component<
           <div className="text-center p-8 max-w-md">
             <h2 className="text-xl font-semibold mb-2">Algo deu errado</h2>
             <p className="text-muted-foreground mb-4 text-sm">{this.state.error}</p>
-            <button onClick={() => this.setState({ hasError: false, error: '' })} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm">
+            <button onClick={() => this.setState({ hasError: false, error: '' })} className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium">
               Tentar novamente
             </button>
           </div>
@@ -123,7 +141,7 @@ function NavItem({ icon, label, active, onClick, collapsed }: {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${active ? 'bg-primary text-primary-foreground shadow-md' : 'text-foreground hover:bg-secondary'}`}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${active ? 'bg-primary text-primary-foreground shadow-md shadow-primary/30' : 'text-foreground hover:bg-muted'}`}
     >
       <span className="flex-shrink-0 text-lg">{icon}</span>
       {!collapsed && <span className="truncate">{label}</span>}
@@ -134,7 +152,7 @@ function NavItem({ icon, label, active, onClick, collapsed }: {
 // Points display component
 function PointsBadge({ points, onClick }: { points: number; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary rounded-full text-sm font-medium text-secondary-foreground hover:bg-muted transition-colors">
+    <button onClick={onClick} className="flex items-center gap-1.5 px-3 py-1.5 bg-muted rounded-full text-sm font-medium text-foreground hover:bg-muted/80 transition-colors border border-border">
       <FaCoins className="text-primary" />
       <span>{points} pts</span>
     </button>
@@ -154,12 +172,12 @@ function ChatBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: 
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`max-w-[85%] ${isUser ? 'order-1' : 'order-1'}`}>
-        <div className={`rounded-2xl px-4 py-3 shadow-sm ${isUser ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-card border border-border rounded-bl-md'}`}>
+      <div className="max-w-[85%]">
+        <div className={`rounded-2xl px-4 py-3 ${isUser ? 'bg-secondary text-secondary-foreground rounded-br-md shadow-lg shadow-secondary/20' : 'bg-card border border-border rounded-bl-md'}`}>
           {isUser ? (
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
           ) : (
-            <div className="text-foreground">
+            <div className="text-card-foreground">
               {renderMarkdown(message.content)}
               {Array.isArray(message?.artifactFiles) && message.artifactFiles.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border">
@@ -177,8 +195,8 @@ function ChatBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: 
         <div className={`flex items-center gap-2 mt-1 ${isUser ? 'justify-end' : 'justify-start'}`}>
           <span className="text-xs text-muted-foreground">{message.timestamp}</span>
           {!isUser && (
-            <button onClick={handleCopy} className="text-muted-foreground hover:text-foreground transition-colors p-0.5">
-              {copied ? <FiCheck className="w-3.5 h-3.5 text-green-600" /> : <FiCopy className="w-3.5 h-3.5" />}
+            <button onClick={handleCopy} className="text-muted-foreground hover:text-primary transition-colors p-0.5">
+              {copied ? <FiCheck className="w-3.5 h-3.5 text-primary" /> : <FiCopy className="w-3.5 h-3.5" />}
             </button>
           )}
         </div>
@@ -191,13 +209,13 @@ function ChatBubble({ message, onCopy }: { message: ChatMessage; onCopy: (text: 
 function TypingIndicator() {
   return (
     <div className="flex justify-start mb-4">
-      <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3 shadow-sm">
+      <div className="bg-card border border-border rounded-2xl rounded-bl-md px-4 py-3">
         <div className="flex items-center gap-2">
           <IoSparkles className="w-4 h-4 text-primary animate-pulse" />
           <div className="flex gap-1">
-            <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-            <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-            <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
           </div>
           <span className="text-xs text-muted-foreground ml-1">Gerando conteudo...</span>
         </div>
@@ -223,7 +241,7 @@ function HistoryCard({ entry, onExpand, expanded }: {
   }
 
   return (
-    <Card className="shadow-md hover:shadow-lg transition-shadow duration-200">
+    <Card className="border-border hover:border-primary/30 transition-colors duration-200">
       <CardContent className="p-4">
         <button onClick={() => onExpand(entry.id)} className="w-full text-left">
           <div className="flex items-start justify-between gap-2">
@@ -232,10 +250,10 @@ function HistoryCard({ entry, onExpand, expanded }: {
               <p className="text-xs text-muted-foreground mt-1">{entry.date}</p>
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs bg-secondary/20 text-secondary border-secondary/30">
                 {entry.level}
               </Badge>
-              <Badge variant="outline" className="text-xs flex items-center gap-1">
+              <Badge variant="outline" className="text-xs flex items-center gap-1 border-border">
                 {entry.format === 'slides' ? <HiPresentationChartBar className="w-3 h-3" /> : <HiDocumentText className="w-3 h-3" />}
                 {entry.format === 'slides' ? 'Slides' : 'Doc'}
               </Badge>
@@ -244,7 +262,7 @@ function HistoryCard({ entry, onExpand, expanded }: {
           </div>
           <div className="flex items-center gap-2 mt-2">
             <span className="text-xs text-muted-foreground flex items-center gap-1">
-              <FaCoins className="w-3 h-3" />
+              <FaCoins className="w-3 h-3 text-primary" />
               {entry.pointCost} pts
             </span>
             {entry.pageCount > 0 && (
@@ -283,10 +301,10 @@ function PlanCard({ title, points, price, perWork, bestValue, onBuy }: {
   onBuy: () => void
 }) {
   return (
-    <Card className={`shadow-md relative transition-all duration-200 hover:shadow-lg ${bestValue ? 'border-2 border-primary ring-2 ring-primary/20' : ''}`}>
+    <Card className={`relative transition-all duration-200 hover:border-primary/50 ${bestValue ? 'border-2 border-primary ring-2 ring-primary/20' : 'border-border'}`}>
       {bestValue && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-          <Badge className="bg-primary text-primary-foreground text-xs px-3 py-0.5 shadow-sm">
+          <Badge className="bg-primary text-primary-foreground text-xs px-3 py-0.5 shadow-lg shadow-primary/30">
             Melhor Valor
           </Badge>
         </div>
@@ -300,7 +318,7 @@ function PlanCard({ title, points, price, perWork, bestValue, onBuy }: {
         <p className="text-xs text-muted-foreground mt-1">{perWork}</p>
       </CardContent>
       <CardFooter className="pt-0">
-        <Button onClick={onBuy} className="w-full" variant={bestValue ? 'default' : 'outline'}>
+        <Button onClick={onBuy} className={`w-full ${bestValue ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/30' : 'bg-secondary text-secondary-foreground hover:bg-secondary/90'}`}>
           <FiShoppingCart className="w-4 h-4 mr-2" />
           Comprar
         </Button>
@@ -312,15 +330,15 @@ function PlanCard({ title, points, price, perWork, bestValue, onBuy }: {
 // Agent status section
 function AgentStatusSection({ isActive }: { isActive: boolean }) {
   return (
-    <Card className="shadow-md">
+    <Card className="border-border">
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
+          <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isActive ? 'bg-primary animate-pulse shadow-lg shadow-primary/50' : 'bg-muted-foreground'}`} />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground">EduIA Content Generator</p>
-            <p className="text-xs text-muted-foreground">Agente de geracao de conteudo academico</p>
+            <p className="text-xs text-muted-foreground">Inteligencia artificial de trabalhos</p>
           </div>
-          <Badge variant={isActive ? 'default' : 'secondary'} className="text-xs flex-shrink-0">
+          <Badge variant={isActive ? 'default' : 'secondary'} className={`text-xs flex-shrink-0 ${isActive ? 'bg-primary/20 text-primary border-primary/30' : ''}`}>
             {isActive ? 'Ativo' : 'Pronto'}
           </Badge>
         </div>
@@ -337,9 +355,9 @@ const SAMPLE_HISTORY: HistoryEntry[] = [
     level: 'Faculdade',
     format: 'documento',
     pageCount: 10,
-    content: '# Revolucao Industrial e suas consequencias sociais\n\n## Introducao\n\nA Revolucao Industrial foi um dos marcos mais significativos da historia moderna, transformando profundamente as relacoes economicas, sociais e culturais da humanidade.\n\n## Desenvolvimento\n\n### Contexto Historico\n\nA Revolucao Industrial teve inicio na Inglaterra, no final do seculo XVIII, e se espalhou progressivamente por toda a Europa e outros continentes.\n\n### Consequencias Sociais\n\n- Urbanizacao acelerada\n- Surgimento da classe operaria\n- Mudancas nas relacoes de trabalho\n- Impactos ambientais\n\n## Conclusao\n\nA Revolucao Industrial transformou irreversivelmente a sociedade, criando as bases para o mundo moderno.\n\n## Referencias\n\n1. HOBSBAWM, Eric. A Era das Revolucoes. Paz & Terra, 2010.\n2. THOMPSON, E.P. A Formacao da Classe Operaria Inglesa. Paz & Terra, 2012.',
+    content: '# Revolucao Industrial e suas consequencias sociais\n\n## Introducao\n\nA Revolucao Industrial foi um dos marcos mais significativos da historia moderna.\n\n## Desenvolvimento\n\n### Contexto Historico\n\nA Revolucao Industrial teve inicio na Inglaterra, no final do seculo XVIII.\n\n### Consequencias Sociais\n\n- Urbanizacao acelerada\n- Surgimento da classe operaria\n- Mudancas nas relacoes de trabalho\n\n## Conclusao\n\nA Revolucao Industrial transformou irreversivelmente a sociedade.\n\n## Referencias\n\n1. HOBSBAWM, Eric. A Era das Revolucoes. Paz & Terra, 2010.',
     date: '18/02/2026',
-    pointCost: 75,
+    pointCost: 120,
     messages: []
   },
   {
@@ -348,9 +366,9 @@ const SAMPLE_HISTORY: HistoryEntry[] = [
     level: 'Medio',
     format: 'slides',
     pageCount: 15,
-    content: '# Fotossintese e Ciclo do Carbono\n\n## Slide 1: Introducao\n\nA fotossintese e o processo pelo qual plantas convertem energia solar em energia quimica.\n\n## Slide 2: Processo da Fotossintese\n\n- Fase clara (fotoquimica)\n- Fase escura (ciclo de Calvin)\n- Fatores limitantes\n\n## Slide 3: Ciclo do Carbono\n\nO ciclo do carbono e essencial para a manutencao da vida na Terra.',
+    content: '# Fotossintese e Ciclo do Carbono\n\n## Slide 1: Introducao\n\nA fotossintese e o processo pelo qual plantas convertem energia solar em energia quimica.\n\n## Slide 2: Processo\n\n- Fase clara\n- Fase escura\n- Fatores limitantes',
     date: '17/02/2026',
-    pointCost: 75,
+    pointCost: 90,
     messages: []
   },
   {
@@ -359,31 +377,9 @@ const SAMPLE_HISTORY: HistoryEntry[] = [
     level: 'Fundamental',
     format: 'documento',
     pageCount: 5,
-    content: '# Operacoes Matematicas Basicas\n\n## Introducao\n\nAs quatro operacoes matematicas basicas sao a base de todo o conhecimento matematico.\n\n## Adicao\n\nA adicao e a operacao de somar dois ou mais numeros.\n\n## Subtracao\n\nA subtracao e a operacao inversa da adicao.\n\n## Multiplicacao\n\nA multiplicacao e uma forma simplificada de adicoes repetidas.\n\n## Divisao\n\nA divisao distribui um valor em partes iguais.',
+    content: '# Operacoes Matematicas Basicas\n\n## Introducao\n\nAs quatro operacoes matematicas basicas sao a base de todo o conhecimento matematico.\n\n## Adicao\n\nA adicao e a operacao de somar dois ou mais numeros.',
     date: '16/02/2026',
-    pointCost: 75,
-    messages: []
-  },
-  {
-    id: 'sample-4',
-    topic: 'Redes de computadores e protocolos TCP/IP',
-    level: 'Tecnico',
-    format: 'documento',
-    pageCount: 8,
-    content: '# Redes de Computadores e Protocolos TCP/IP\n\n## Introducao\n\nAs redes de computadores sao essenciais para a comunicacao moderna.\n\n## Modelo OSI\n\n- Camada fisica\n- Camada de enlace\n- Camada de rede\n- Camada de transporte\n\n## Protocolo TCP/IP\n\nO TCP/IP e o conjunto de protocolos que fundamenta a Internet.',
-    date: '15/02/2026',
-    pointCost: 75,
-    messages: []
-  },
-  {
-    id: 'sample-5',
-    topic: 'Literatura brasileira: Machado de Assis',
-    level: 'Medio',
-    format: 'documento',
-    pageCount: 7,
-    content: '# Literatura Brasileira: Machado de Assis\n\n## Introducao\n\nMachado de Assis e considerado o maior escritor brasileiro de todos os tempos.\n\n## Obras Principais\n\n- Dom Casmurro\n- Memorias Postumas de Bras Cubas\n- Quincas Borba\n\n## Estilo Literario\n\nMachado desenvolveu um estilo unico, marcado pela ironia e pela profundidade psicologica.',
-    date: '14/02/2026',
-    pointCost: 75,
+    pointCost: 60,
     messages: []
   }
 ]
@@ -426,6 +422,9 @@ export default function Page() {
 
   // Purchase success message
   const [purchaseSuccess, setPurchaseSuccess] = useState('')
+
+  // Pix copied state
+  const [pixCopied, setPixCopied] = useState(false)
 
   // Refs
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -511,7 +510,7 @@ export default function Page() {
     const greetingMessage: ChatMessage = {
       id: generateId(),
       role: 'assistant',
-      content: '**EduIA -- Criacao de Trabalhos**\n\nTrabalhos e apresentacoes feitos do zero\nEntrega em PDF, Word ou Slides\nVoce comeca com 250 pontos gratis!\n\nPara comecar, me diga o que voce precisa. Vou precisar saber:\n\n- **Tema** do trabalho\n- **Nivel**: Fundamental, Medio, Tecnico ou Faculdade\n- **Quantidade** de paginas ou slides\n- **Formato**: Documento ou Apresentacao\n\nPode enviar tudo de uma vez ou vamos conversando!',
+      content: '**EduIA -- Inteligencia Artificial de Trabalhos**\n\nA EduIA cria QUALQUER tipo de trabalho do zero:\n- Trabalhos escolares e academicos\n- Redacoes e pesquisas\n- Resumos e projetos completos\n- Apresentacoes em slides\n- Documentos formatados\n\nTudo profissional, organizado e pronto para usar.\n\n**Custos em pontos:**\n- Trabalho simples (ate 5 pag) = 60 pts\n- Trabalho completo (6+ pag) = 120 pts\n- Apresentacao em slides = 90 pts\n\nPara comecar, me diga o que voce precisa!',
       timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     }
     setMessages([greetingMessage])
@@ -561,35 +560,37 @@ export default function Page() {
         setMessages(prev => [...prev, assistantMessage])
 
         // Check if the response looks like generated content (longer responses with structure)
-        // The agent first asks questions (short responses), then generates content (long responses)
         const isGeneratedContent = text.length > 500 || text.includes('# ') || text.includes('## ')
 
         if (isGeneratedContent && !pointsDeducted) {
-          // Check points before deducting
-          if (points < POINTS_PER_GENERATION) {
-            setChatError('Seus pontos nao sao suficientes. Escolha um plano para continuar usando a EduIA.')
-            setShowBuyModal(true)
-          } else {
-            // Deduct points only once per session for actual content generation
-            setPoints(prev => Math.max(0, prev - POINTS_PER_GENERATION))
-            setPointsDeducted(true)
+          // Determine cost based on format and page count
+          setMessages(prev => {
+            const allMsgs = prev
+            const allUserText = allMsgs.filter(m => m.role === 'user').map(m => m.content).join(' ').toLowerCase()
 
-            // Save to history only when real content is generated
-            setMessages(prev => {
-              const allMsgs = prev
-              const firstUserMsg = allMsgs.find(m => m.role === 'user')
-              const topic = firstUserMsg?.content || trimmed
+            // Determine format
+            let format = 'documento'
+            if (allUserText.includes('slide') || allUserText.includes('apresentacao') || allUserText.includes('powerpoint')) format = 'slides'
 
-              // Extract level heuristic from all user messages in session
-              const allUserText = allMsgs.filter(m => m.role === 'user').map(m => m.content).join(' ').toLowerCase()
+            const cost = determinePointCost(allUserText, format)
+
+            // Check points before deducting
+            if (points < cost) {
+              setChatError('Seus pontos nao sao suficientes. Escolha um pacote de pontos para continuar usando a EduIA.')
+              setShowBuyModal(true)
+            } else {
+              // Deduct points
+              setPoints(p => Math.max(0, p - cost))
+              setPointsDeducted(true)
+
+              // Extract level heuristic
               let level = 'Faculdade'
               if (allUserText.includes('fundamental') || allUserText.includes('basico')) level = 'Fundamental'
               else if (allUserText.includes('medio') || allUserText.includes('ensino medio')) level = 'Medio'
               else if (allUserText.includes('tecnico') || allUserText.includes('tecnologo')) level = 'Tecnico'
 
-              // Extract format heuristic
-              let format = 'documento'
-              if (allUserText.includes('slide') || allUserText.includes('apresentacao') || allUserText.includes('powerpoint')) format = 'slides'
+              const firstUserMsg = allMsgs.find(m => m.role === 'user')
+              const topic = firstUserMsg?.content || trimmed
 
               const entry: HistoryEntry = {
                 id: generateId(),
@@ -599,16 +600,16 @@ export default function Page() {
                 pageCount: 0,
                 content: text,
                 date: getDateString(),
-                pointCost: POINTS_PER_GENERATION,
+                pointCost: cost,
                 messages: allMsgs
               }
               setHistory(h => [entry, ...h])
-              return prev
-            })
+              setChatSuccess('Trabalho criado com sucesso! Pontos descontados do seu saldo.')
+              setTimeout(() => setChatSuccess(''), 4000)
+            }
 
-            setChatSuccess('Conteudo gerado com sucesso!')
-            setTimeout(() => setChatSuccess(''), 4000)
-          }
+            return prev
+          })
         }
       } else {
         const errorMsg = result?.error || result?.response?.message || 'Erro ao gerar conteudo. Tente novamente.'
@@ -639,8 +640,15 @@ export default function Page() {
   const handleBuyPoints = useCallback((amount: number) => {
     setPoints(prev => prev + amount)
     setShowBuyModal(false)
-    setPurchaseSuccess(`${amount.toLocaleString('pt-BR')} pontos adicionados com sucesso!`)
-    setTimeout(() => setPurchaseSuccess(''), 4000)
+    setPurchaseSuccess(`Pagamento confirmado! ${amount.toLocaleString('pt-BR')} pontos adicionados a sua conta. Voce ja pode continuar usando a EduIA.`)
+    setTimeout(() => setPurchaseSuccess(''), 6000)
+  }, [])
+
+  // Copy pix
+  const handleCopyPix = useCallback(async () => {
+    await copyToClipboard('5566997213043')
+    setPixCopied(true)
+    setTimeout(() => setPixCopied(false), 3000)
   }, [])
 
   // History expand toggle
@@ -673,35 +681,51 @@ export default function Page() {
   // Points percentage for progress bar
   const pointsPercentage = Math.min(100, (points / 500) * 100)
 
+  // Min cost for points warning
+  const minCost = POINTS_SIMPLE
+
   // Render Dashboard
   function renderDashboard() {
     return (
       <div className="space-y-6">
         {/* Welcome + Points */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="shadow-md">
+          <Card className="border-border bg-gradient-to-br from-card to-muted/30">
             <CardContent className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <FaGraduationCap className="w-5 h-5 text-primary" />
+                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                  <BsLightningChargeFill className="w-5 h-5 text-primary" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-foreground">Bem-vindo ao EduIA</h2>
-                  <p className="text-sm text-muted-foreground">Sua plataforma de conteudo academico</p>
+                  <p className="text-sm text-muted-foreground">Inteligencia artificial de trabalhos</p>
                 </div>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Trabalhos e apresentacoes feitos do zero, com qualidade profissional e entrega rapida.
-                Entrega em PDF, Word ou Slides, organizados e prontos para envio.
+                Cria QUALQUER tipo de trabalho do zero: trabalhos escolares, redacoes, pesquisas, resumos, projetos, apresentacoes e documentos formatados.
               </p>
-              <Button onClick={startNewWork} className="w-full mt-4 shadow-sm">
+              <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                <div className="bg-muted/50 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">Simples</p>
+                  <p className="text-sm font-bold text-primary">{POINTS_SIMPLE} pts</p>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">Completo</p>
+                  <p className="text-sm font-bold text-primary">{POINTS_COMPLETE} pts</p>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-2">
+                  <p className="text-xs text-muted-foreground">Slides</p>
+                  <p className="text-sm font-bold text-primary">{POINTS_SLIDES} pts</p>
+                </div>
+              </div>
+              <Button onClick={startNewWork} className="w-full mt-4 shadow-lg shadow-primary/30 bg-primary text-primary-foreground hover:bg-primary/90">
                 <FiPlus className="w-4 h-4 mr-2" />
                 Novo Trabalho
               </Button>
             </CardContent>
           </Card>
 
-          <Card className="shadow-md">
+          <Card className="border-border">
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-foreground">Seus Pontos</h3>
@@ -711,20 +735,20 @@ export default function Page() {
               <p className="text-xs text-muted-foreground mb-3">pontos disponiveis</p>
               <Progress value={pointsPercentage} className="h-2 mb-3" />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{Math.floor(points / POINTS_PER_GENERATION)} trabalhos restantes</span>
-                <span>{POINTS_PER_GENERATION} pts/trabalho</span>
+                <span>~{Math.floor(points / minCost)} trabalhos restantes</span>
+                <span>{POINTS_SIMPLE}-{POINTS_COMPLETE} pts/trabalho</span>
               </div>
-              {points < 150 && (
-                <div className="mt-3 p-2 bg-destructive/10 rounded-lg flex items-center gap-2">
+              {points < 120 && (
+                <div className="mt-3 p-2 bg-destructive/10 rounded-lg flex items-center gap-2 border border-destructive/20">
                   <FiAlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                   <p className="text-xs text-destructive">
-                    {points < POINTS_PER_GENERATION
-                      ? 'Seus pontos nao sao suficientes. Escolha um plano para continuar.'
+                    {points < minCost
+                      ? 'Seus pontos nao sao suficientes. Escolha um pacote para continuar.'
                       : 'Seus pontos estao acabando!'}
                   </p>
                 </div>
               )}
-              <Button variant="outline" onClick={() => setShowBuyModal(true)} className="w-full mt-3">
+              <Button onClick={() => setShowBuyModal(true)} className="w-full mt-3 bg-secondary text-secondary-foreground hover:bg-secondary/90 shadow-lg shadow-secondary/20">
                 <FiShoppingCart className="w-4 h-4 mr-2" />
                 Comprar Pontos
               </Button>
@@ -734,9 +758,9 @@ export default function Page() {
 
         {/* Purchase success message */}
         {purchaseSuccess && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-            <FiCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
-            <p className="text-sm text-green-700">{purchaseSuccess}</p>
+          <div className="p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-2">
+            <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />
+            <p className="text-sm text-primary">{purchaseSuccess}</p>
           </div>
         )}
 
@@ -745,7 +769,7 @@ export default function Page() {
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-foreground">Trabalhos Recentes</h3>
             {recentHistory.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={() => navigateTo('history')} className="text-xs">
+              <Button variant="ghost" size="sm" onClick={() => navigateTo('history')} className="text-xs text-muted-foreground hover:text-foreground">
                 Ver todos
                 <FiChevronDown className="w-3 h-3 ml-1" />
               </Button>
@@ -753,14 +777,14 @@ export default function Page() {
           </div>
 
           {recentHistory.length === 0 ? (
-            <Card className="shadow-md">
+            <Card className="border-border">
               <CardContent className="p-8 text-center">
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <FaFileAlt className="w-7 h-7 text-muted-foreground" />
                 </div>
                 <h4 className="text-sm font-medium text-foreground mb-1">Nenhum trabalho ainda</h4>
                 <p className="text-xs text-muted-foreground mb-4">Comece gerando seu primeiro conteudo academico</p>
-                <Button onClick={startNewWork} size="sm">
+                <Button onClick={startNewWork} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
                   <FiPlus className="w-3.5 h-3.5 mr-1.5" />
                   Criar Primeiro Trabalho
                 </Button>
@@ -769,19 +793,19 @@ export default function Page() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {recentHistory.map(entry => (
-                <Card key={entry.id} className="shadow-md hover:shadow-lg transition-shadow duration-200 cursor-pointer" onClick={() => { setExpandedHistoryId(entry.id); navigateTo('history') }}>
+                <Card key={entry.id} className="border-border hover:border-primary/30 transition-colors duration-200 cursor-pointer" onClick={() => { setExpandedHistoryId(entry.id); navigateTo('history') }}>
                   <CardContent className="p-4">
                     <h4 className="text-sm font-medium text-foreground truncate">{entry.topic || 'Sem titulo'}</h4>
                     <div className="flex items-center gap-1.5 mt-2">
-                      <Badge variant="secondary" className="text-xs">{entry.level}</Badge>
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="secondary" className="text-xs bg-secondary/20 text-secondary border-secondary/30">{entry.level}</Badge>
+                      <Badge variant="outline" className="text-xs border-border">
                         {entry.format === 'slides' ? 'Slides' : 'Doc'}
                       </Badge>
                     </div>
                     <div className="flex items-center justify-between mt-3">
                       <span className="text-xs text-muted-foreground">{entry.date}</span>
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <FaCoins className="w-2.5 h-2.5" />
+                        <FaCoins className="w-2.5 h-2.5 text-primary" />
                         {entry.pointCost} pts
                       </span>
                     </div>
@@ -815,7 +839,7 @@ export default function Page() {
           </div>
           <div className="flex items-center gap-2">
             <PointsBadge points={points} onClick={() => setShowBuyModal(true)} />
-            <Button variant="outline" size="sm" onClick={startNewWork} className="text-xs h-8">
+            <Button variant="outline" size="sm" onClick={startNewWork} className="text-xs h-8 border-border">
               <FiPlus className="w-3.5 h-3.5 mr-1" />
               Novo
             </Button>
@@ -823,10 +847,10 @@ export default function Page() {
         </div>
 
         {/* Points warning */}
-        {points < 150 && points >= POINTS_PER_GENERATION && (
-          <div className="mx-4 mt-2 p-2 bg-destructive/10 rounded-lg flex items-center gap-2">
+        {points < 120 && points >= minCost && (
+          <div className="mx-4 mt-2 p-2 bg-destructive/10 rounded-lg flex items-center gap-2 border border-destructive/20">
             <FiAlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-            <p className="text-xs text-destructive">Pontos baixos! Restam {Math.floor(points / POINTS_PER_GENERATION)} geracoes.</p>
+            <p className="text-xs text-destructive">Pontos baixos! Considere comprar mais pontos.</p>
             <Button variant="ghost" size="sm" className="text-xs h-6 ml-auto text-destructive" onClick={() => setShowBuyModal(true)}>
               Comprar
             </Button>
@@ -848,17 +872,13 @@ export default function Page() {
                   'Trabalho sobre a Revolucao Francesa para ensino medio, 8 paginas',
                   'Apresentacao de slides sobre fotossintese para fundamental, 10 slides',
                   'Artigo sobre inteligencia artificial para faculdade, 15 paginas',
-                  'Trabalho tecnico sobre redes de computadores, 10 paginas'
+                  'Trabalho tecnico sobre redes de computadores, 5 paginas'
                 ].map((suggestion, idx) => (
-                  <button key={idx} onClick={() => { setInputValue(suggestion) }} className="text-left p-3 rounded-lg border border-border bg-card hover:bg-secondary transition-colors text-xs text-foreground leading-relaxed">
+                  <button key={idx} onClick={() => { setInputValue(suggestion) }} className="text-left p-3 rounded-lg border border-border bg-card hover:border-primary/40 hover:bg-muted/50 transition-colors text-xs text-foreground leading-relaxed">
                     {suggestion}
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1 justify-center">
-                <FaCoins className="w-3 h-3" />
-                Cada geracao custa {POINTS_PER_GENERATION} pontos
-              </p>
             </div>
           )}
 
@@ -869,9 +889,9 @@ export default function Page() {
 
         {/* Success/Error messages */}
         {chatSuccess && (
-          <div className="mx-4 mb-2 p-2 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-            <FiCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
-            <p className="text-xs text-green-700">{chatSuccess}</p>
+          <div className="mx-4 mb-2 p-2 bg-primary/10 border border-primary/20 rounded-lg flex items-center gap-2">
+            <FiCheck className="w-4 h-4 text-primary flex-shrink-0" />
+            <p className="text-xs text-primary">{chatSuccess}</p>
           </div>
         )}
         {chatError && (
@@ -892,15 +912,15 @@ export default function Page() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyPress}
-              placeholder="Descreva o trabalho academico que deseja gerar..."
+              placeholder="Descreva o trabalho que deseja gerar..."
               disabled={isGenerating}
-              className="flex-1 bg-background"
+              className="flex-1 bg-muted border-border focus:border-primary"
             />
             <Button
               onClick={sendMessage}
               disabled={!inputValue.trim() || isGenerating}
               size="sm"
-              className="h-10 w-10 p-0 flex-shrink-0"
+              className="h-10 w-10 p-0 flex-shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               {isGenerating ? (
                 <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
@@ -931,11 +951,11 @@ export default function Page() {
               value={historySearch}
               onChange={(e) => setHistorySearch(e.target.value)}
               placeholder="Buscar por tema..."
-              className="pl-9 bg-background"
+              className="pl-9 bg-muted border-border"
             />
           </div>
           <Select value={historyLevelFilter} onValueChange={setHistoryLevelFilter}>
-            <SelectTrigger className="w-full sm:w-[140px] bg-background">
+            <SelectTrigger className="w-full sm:w-[140px] bg-muted border-border">
               <SelectValue placeholder="Nivel" />
             </SelectTrigger>
             <SelectContent>
@@ -947,7 +967,7 @@ export default function Page() {
             </SelectContent>
           </Select>
           <Select value={historyFormatFilter} onValueChange={setHistoryFormatFilter}>
-            <SelectTrigger className="w-full sm:w-[140px] bg-background">
+            <SelectTrigger className="w-full sm:w-[140px] bg-muted border-border">
               <SelectValue placeholder="Formato" />
             </SelectTrigger>
             <SelectContent>
@@ -960,7 +980,7 @@ export default function Page() {
 
         {/* History list */}
         {filteredHistory.length === 0 ? (
-          <Card className="shadow-md">
+          <Card className="border-border">
             <CardContent className="p-8 text-center">
               <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                 <FiClock className="w-7 h-7 text-muted-foreground" />
@@ -976,7 +996,7 @@ export default function Page() {
                   : 'Seus trabalhos gerados aparecerao aqui'}
               </p>
               {!historySearch && historyLevelFilter === 'all' && historyFormatFilter === 'all' && (
-                <Button onClick={startNewWork} size="sm">
+                <Button onClick={startNewWork} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
                   <FiPlus className="w-3.5 h-3.5 mr-1.5" />
                   Criar Primeiro Trabalho
                 </Button>
@@ -1009,11 +1029,11 @@ export default function Page() {
         {/* Mobile header */}
         <header className="md:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="p-1.5 rounded-lg hover:bg-muted transition-colors">
               {mobileMenuOpen ? <FiX className="w-5 h-5" /> : <FiMenu className="w-5 h-5" />}
             </button>
             <div className="flex items-center gap-2">
-              <FaGraduationCap className="w-5 h-5 text-primary" />
+              <BsLightningChargeFill className="w-5 h-5 text-primary" />
               <span className="font-semibold text-foreground">EduIA</span>
             </div>
           </div>
@@ -1022,7 +1042,7 @@ export default function Page() {
 
         {/* Mobile menu overlay */}
         {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 z-40 bg-black/30" onClick={() => setMobileMenuOpen(false)}>
+          <div className="md:hidden fixed inset-0 z-40 bg-black/50" onClick={() => setMobileMenuOpen(false)}>
             <div className="absolute left-0 top-[53px] bottom-0 w-64 bg-card border-r border-border p-4 space-y-1" onClick={e => e.stopPropagation()}>
               <NavItem icon={<FiHome />} label="Painel" active={activeScreen === 'dashboard'} onClick={() => navigateTo('dashboard')} collapsed={false} />
               <NavItem icon={<FiMessageSquare />} label="Novo Trabalho" active={activeScreen === 'chat'} onClick={startNewWork} collapsed={false} />
@@ -1030,7 +1050,7 @@ export default function Page() {
               <NavItem icon={<FiShoppingCart />} label="Comprar Pontos" active={false} onClick={() => navigateTo('buy')} collapsed={false} />
               <Separator className="my-3" />
               <div className="flex items-center justify-between px-3 py-2">
-                <Label htmlFor="sample-toggle-mobile" className="text-xs text-muted-foreground">Sample Data</Label>
+                <Label htmlFor="sample-toggle-mobile" className="text-xs text-muted-foreground">Dados de exemplo</Label>
                 <Switch id="sample-toggle-mobile" checked={showSampleData} onCheckedChange={setShowSampleData} />
               </div>
             </div>
@@ -1042,7 +1062,7 @@ export default function Page() {
           <aside className={`hidden md:flex flex-col fixed left-0 top-0 bottom-0 z-30 bg-card border-r border-border transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-56'}`}>
             {/* Logo */}
             <div className={`p-4 flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-2'}`}>
-              <FaGraduationCap className="w-6 h-6 text-primary flex-shrink-0" />
+              <BsLightningChargeFill className="w-6 h-6 text-primary flex-shrink-0" />
               {!sidebarCollapsed && <span className="text-lg font-semibold text-foreground">EduIA</span>}
             </div>
 
@@ -1061,13 +1081,13 @@ export default function Page() {
               <Separator />
               {!sidebarCollapsed && (
                 <div className="flex items-center justify-between px-3 py-2">
-                  <Label htmlFor="sample-toggle-desktop" className="text-xs text-muted-foreground cursor-pointer">Sample Data</Label>
+                  <Label htmlFor="sample-toggle-desktop" className="text-xs text-muted-foreground cursor-pointer">Dados de exemplo</Label>
                   <Switch id="sample-toggle-desktop" checked={showSampleData} onCheckedChange={setShowSampleData} />
                 </div>
               )}
               <button
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
+                className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-muted transition-colors text-muted-foreground"
               >
                 {sidebarCollapsed ? <FiMenu className="w-4 h-4" /> : <FiChevronLeft className="w-4 h-4" />}
               </button>
@@ -1117,52 +1137,63 @@ export default function Page() {
 
         {/* Buy Points Modal */}
         <Dialog open={showBuyModal} onOpenChange={setShowBuyModal}>
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-lg bg-card border-border">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-foreground">
                 <FaCoins className="w-5 h-5 text-primary" />
                 Comprar Pontos
               </DialogTitle>
-              <DialogDescription>
-                Escolha o plano ideal para suas necessidades academicas
+              <DialogDescription className="text-muted-foreground">
+                Escolha um pacote de pontos para continuar usando a EduIA
               </DialogDescription>
             </DialogHeader>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               <PlanCard
                 title="Basico"
                 points={1000}
-                price="R$5"
-                perWork={`~${Math.floor(1000 / POINTS_PER_GENERATION)} trabalhos`}
+                price="R$10"
+                perWork={`~${Math.floor(1000 / POINTS_SIMPLE)} trabalhos`}
                 bestValue={false}
                 onBuy={() => handleBuyPoints(1000)}
               />
               <PlanCard
                 title="Popular"
                 points={2500}
-                price="R$10"
-                perWork={`~${Math.floor(2500 / POINTS_PER_GENERATION)} trabalhos`}
+                price="R$20"
+                perWork={`~${Math.floor(2500 / POINTS_SIMPLE)} trabalhos`}
                 bestValue={false}
                 onBuy={() => handleBuyPoints(2500)}
               />
               <PlanCard
                 title="Premium"
-                points={4000}
-                price="R$25"
-                perWork={`~${Math.floor(4000 / POINTS_PER_GENERATION)} trabalhos`}
+                points={5000}
+                price="R$40"
+                perWork={`~${Math.floor(5000 / POINTS_SIMPLE)} trabalhos`}
                 bestValue={true}
-                onBuy={() => handleBuyPoints(4000)}
+                onBuy={() => handleBuyPoints(5000)}
               />
             </div>
             <Separator className="my-4" />
-            <div className="bg-secondary/50 rounded-lg p-4 text-center space-y-2">
+            <div className="bg-muted/50 rounded-lg p-4 text-center space-y-3 border border-border">
               <p className="text-sm font-medium text-foreground">Pagamento via Pix</p>
+              <p className="text-xs text-muted-foreground">Nome: Felipe Ramos</p>
               <div className="flex items-center justify-center gap-2">
-                <code className="bg-background px-3 py-1.5 rounded-md text-sm font-mono text-foreground border border-border select-all">5566997213043</code>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => copyToClipboard('5566997213043')}>
-                  <FiCopy className="w-3.5 h-3.5" />
+                <code className="bg-background px-3 py-1.5 rounded-md text-sm font-mono text-primary border border-primary/30 select-all">5566997213043</code>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground hover:text-primary" onClick={handleCopyPix}>
+                  {pixCopied ? <FiCheck className="w-3.5 h-3.5 text-primary" /> : <FiCopy className="w-3.5 h-3.5" />}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">Envie o comprovante apos o pagamento para liberar seus pontos.</p>
+              {/* QR Code */}
+              <div className="flex justify-center">
+                <div className="bg-white rounded-lg p-2 inline-block">
+                  <img
+                    src={QR_CODE_URL}
+                    alt="QR Code Pix"
+                    className="w-32 h-32 object-contain"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Apos realizar o pagamento, envie o comprovante no chat. Seus pontos serao liberados apos a confirmacao.</p>
             </div>
             <p className="text-xs text-muted-foreground text-center mt-3">
               Ao comprar, voce concorda com os termos de uso da plataforma EduIA.
